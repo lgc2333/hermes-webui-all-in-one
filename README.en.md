@@ -39,7 +39,28 @@ docker compose up -d
 | 9119 | Dashboard | Remote connection for Hermes Desktop (basic auth / oauth) |
 | 8642 | Gateway API | Agent HTTP API (webui bridge, requires API_SERVER_KEY) |
 
-See `.env.example` for all environment variables.
+See `.env.example` for all environment variables; for the rest, refer to the [Hermes Agent docs](https://hermes-agent.nousresearch.com/docs) and the [WebUI configuration guide](https://github.com/nesquena/hermes-webui#configuration--access).
+
+**root/sudo access**: the image ships without sudo and no usable passwords. To get root inside the container, create your own sudoers file and mount it in:
+
+1. Create the sudoers file on the host (username hermes is fixed; uid varies with HERMES_UID — no need to adjust):
+
+```bash
+echo 'hermes ALL=(ALL:ALL) NOPASSWD:ALL' | sudo tee ./sudoers-hermes
+sudo chown root:root ./sudoers-hermes && sudo chmod 440 ./sudoers-hermes
+```
+
+The file must be owned by root with mode 0440, otherwise sudo silently ignores it — no error, no effect.
+
+2. Mount it in compose:
+
+```yaml
+volumes:
+  - ./data:/opt/data
+  - ./sudoers-hermes:/etc/sudoers.d/hermes:ro
+```
+
+Restart, then `sudo <cmd>` works passwordless inside the container. Note: passwordless sudo has security implications — weigh them yourself.
 
 ## Build from source
 

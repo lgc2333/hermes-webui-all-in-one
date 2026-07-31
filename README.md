@@ -39,7 +39,28 @@ docker compose up -d
 | 9119 | Dashboard | Hermes Desktop 远程连接（basic auth / oauth） |
 | 8642 | Gateway API | agent HTTP API（webui 桥接，需 API_SERVER_KEY） |
 
-环境变量详见 `.env.example`。
+环境变量详见 `.env.example`，其余配置项建议查阅 [Hermes Agent 文档](https://hermes-agent.nousresearch.com/docs) 与 [WebUI 配置说明](https://github.com/nesquena/hermes-webui#configuration--access)。
+
+**root/sudo 权限**：镜像默认无 sudo、无可用密码。如需容器内提权，自行创建 sudoers 文件并挂载：
+
+1. 宿主机创建 sudoers 文件（用户名 hermes 固定；uid 随 HERMES_UID 变化，无需改动）：
+
+```bash
+echo 'hermes ALL=(ALL:ALL) NOPASSWD:ALL' | sudo tee ./sudoers-hermes
+sudo chown root:root ./sudoers-hermes && sudo chmod 440 ./sudoers-hermes
+```
+
+文件需属主 root 且权限 0440，否则 sudo 会静默忽略，不报错也不生效。
+
+2. compose volumes 挂载：
+
+```yaml
+volumes:
+  - ./data:/opt/data
+  - ./sudoers-hermes:/etc/sudoers.d/hermes:ro
+```
+
+重启后容器内 `sudo <命令>` 即可免密执行。注意：免密 sudo 有安全风险，请自行权衡。
 
 ## 手动构建
 
