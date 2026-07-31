@@ -1,0 +1,8 @@
+# 跟踪范围：docker 相关文件 + scripts。其余一律忽略。
+temp/
+.venv/
+__pycache__/
+**/*.egg-info/
+build/
+dist/
+.hermes/

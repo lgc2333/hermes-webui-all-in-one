@@ -1,0 +1,12 @@
+#!/command/with-contenv sh
+# webui 走统一 venv（/opt/.venv），stdio hermes 子进程同 venv
+export HOME=/opt/data
+cd /opt/webui
+
+webui_host="${HERMES_WEBUI_HOST:-0.0.0.0}"
+webui_port="${HERMES_WEBUI_PORT:-8787}"
+export HERMES_WEBUI_HOST="$webui_host"
+export HERMES_WEBUI_PORT="$webui_port"
+
+[ "$(id -u)" = 0 ] || exec /opt/.venv/bin/python server.py
+exec s6-setuidgid hermes /opt/.venv/bin/python server.py

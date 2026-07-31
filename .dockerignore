@@ -1,0 +1,13 @@
+# context 只发：Dockerfile、docker/、temp/{pyproject.toml,uv.lock,webui}
+temp/hermes/
+temp/scripts/
+temp/venv/
+temp/.venv/
+.venv/
+**/.git/
+**/__pycache__/
+**/*.egg-info/
+**/node_modules/
+**/build/
+**/dist/
+.hermes/

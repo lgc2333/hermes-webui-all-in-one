@@ -1,0 +1,36 @@
+# hermes-webui-all-in-one：webui(8787) + dashboard(9119) + gateway API(8642)
+# API_SERVER_KEY Required
+services:
+  hermes-all-in-one:
+    image: ${IMAGE:-ghcr.io/lgc2333/hermes-webui-all-in-one}:${TAG:-latest}
+    container_name: hermes-all-in-one
+    command: ["gateway", "run"]
+    restart: unless-stopped
+    ports:
+      - "${WEBUI_PORT:-8787}:8787"
+      - "${DASHBOARD_PORT:-9119}:9119"
+      - "${GATEWAY_PORT:-8642}:8642"
+    volumes:
+      - ./data:/opt/data
+    environment:  # you can add whatever you want
+      - HERMES_UID=${HERMES_UID:-10000}
+      - HERMES_GID=${HERMES_GID:-10000}
+      # dashboard
+      - HERMES_DASHBOARD=1
+      - HERMES_DASHBOARD_BASIC_AUTH_USERNAME=${HERMES_DASHBOARD_BASIC_AUTH_USERNAME:-}
+      - HERMES_DASHBOARD_BASIC_AUTH_PASSWORD=${HERMES_DASHBOARD_BASIC_AUTH_PASSWORD:-}
+      - HERMES_DASHBOARD_BASIC_AUTH_PASSWORD_HASH=${HERMES_DASHBOARD_BASIC_AUTH_PASSWORD_HASH:-}
+      - HERMES_DASHBOARD_BASIC_AUTH_SECRET=${HERMES_DASHBOARD_BASIC_AUTH_SECRET:-}
+      - HERMES_DASHBOARD_OAUTH_CLIENT_ID=${HERMES_DASHBOARD_OAUTH_CLIENT_ID:-}
+      # gateway
+      - API_SERVER_ENABLED=1
+      - API_SERVER_HOST=0.0.0.0
+      - API_SERVER_KEY=${API_SERVER_KEY:?set API_SERVER_KEY in .env}
+      # webui
+      - HERMES_API_URL=http://127.0.0.1:8642
+      - HERMES_WEBUI_HOST=0.0.0.0
+      - HERMES_WEBUI_PORT=8787
+      - HERMES_WEBUI_PASSWORD=${HERMES_WEBUI_PASSWORD:-}
+      - HERMES_WEBUI_AGENT_DIR=/opt/hermes
+      - HERMES_WEBUI_STATE_DIR=/opt/data/webui
+      - HERMES_WEBUI_DEFAULT_WORKSPACE=/opt/data/workspace/home

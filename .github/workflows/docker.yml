@@ -1,0 +1,139 @@
+name: Docker
+
+# 构建触发：push v* tag（release 发布）或 PR（验证构建，不推送）；
+# 普通 push 分支不构建。workflow_dispatch 手动构建【推送镜像】。
+# temp/ 不入 git，构建前由 sync-sources.sh 现场生成。
+# 版本 ref：留空 = 自动探测上游最新 release tag；main = 默认分支最新 commit；
+#           其他 = 显式 tag / 分支 / sha。
+# 镜像标签（Extract metadata 步骤）：
+#   v1 / v1.2 / v1.2.3          本项目版本号（push v* tag）
+#   <分支名>                    本项目分支（如 main）
+#   latest                      release tag、main 分支构建，或手动构建时
+#                               main 分支 HEAD 带 tag；勾选 mark_latest 强制打
+#   <commit sha>                本项目 commit hash（始终）
+#   <本项目ref>-<hermes>-<webui> 组合标签（如 v1.0.0-v2026.7.30-v0.52.106）
+
+on:
+  push:
+    tags: [ 'v*' ]
+  pull_request:
+    branches: [ "master" ]
+  workflow_dispatch:
+    inputs:
+      agent_version:
+        description: 'hermes-agent ref（留空=latest release；main=latest commit；或 tag/sha）'
+        required: false
+        default: ''
+      webui_version:
+        description: 'hermes-webui ref（留空=latest release；main=latest commit；或 tag/sha）'
+        required: false
+        default: ''
+      mark_latest:
+        description: '强制打 latest 标签（不勾选则按原判定）'
+        required: false
+        default: false
+        type: boolean
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+  AGENT_VERSION: ${{ inputs.agent_version }}
+  WEBUI_VERSION: ${{ inputs.webui_version }}
+  MARK_LATEST: ${{ inputs.mark_latest }}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          # 全历史 + tags：供 latest 判定探测"main 分支 HEAD 是否带 tag"
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Stage upstream sources (temp/)
+        run: bash docker/sync-sources.sh "$AGENT_VERSION" "$WEBUI_VERSION"
+
+      - name: Resolve versions
+        id: versions
+        run: |
+          . temp/versions.env
+          echo "agent=$AGENT_VERSION" >> "$GITHUB_OUTPUT"
+          echo "webui=$WEBUI_VERSION" >> "$GITHUB_OUTPUT"
+          echo "base_image_tag=$BASE_IMAGE_TAG" >> "$GITHUB_OUTPUT"
+          echo "webui_patch_version=$WEBUI_PATCH_VERSION" >> "$GITHUB_OUTPUT"
+          echo "uv_sync_frozen=$UV_SYNC_FROZEN" >> "$GITHUB_OUTPUT"
+          echo "combo_tag=${GITHUB_REF_NAME}-${AGENT_VERSION}-${WEBUI_VERSION}" >> "$GITHUB_OUTPUT"
+          # latest 判定：仅 v 前缀 tag（release）或 main 分支构建；
+          # 手动构建勾选 mark_latest 直接打 latest，否则 main HEAD 的 tag 也须 v 前缀
+          LATEST_ENABLE="false"
+          is_v_tag() { [ "$1" = "tag" ] && [ "${GITHUB_REF_NAME#v}" != "$GITHUB_REF_NAME" ]; }
+          if [ "$GITHUB_EVENT_NAME" = "push" ] && { is_v_tag "$GITHUB_REF_TYPE" || { [ "$GITHUB_REF_TYPE" = "branch" ] && [ "$GITHUB_REF_NAME" = "main" ]; }; }; then
+              LATEST_ENABLE="true"
+          elif [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
+              if [ "$MARK_LATEST" = "true" ] || is_v_tag "$GITHUB_REF_TYPE" || { [ "$GITHUB_REF_NAME" = "main" ] && head_tag="$(git describe --tags --exact-match HEAD 2>/dev/null)" && [ "${head_tag#v}" != "$head_tag" ]; }; then
+                  LATEST_ENABLE="true"
+              fi
+          fi
+          echo "latest_enable=$LATEST_ENABLE" >> "$GITHUB_OUTPUT"
+          echo "解析：agent=$AGENT_VERSION webui=$WEBUI_VERSION 组合标签=${GITHUB_REF_NAME}-${AGENT_VERSION}-${WEBUI_VERSION} latest=$LATEST_ENABLE"
+
+      - name: Install cosign
+        if: github.event_name != 'pull_request'
+        uses: sigstore/cosign-installer@v3.5.0
+        with:
+          cosign-release: 'v2.2.4'
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3.0.0
+
+      - name: Log into registry ${{ env.REGISTRY }}
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3.0.0
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5.0.0
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=semver,pattern=v{{version}}
+            type=raw,value=${{ github.ref_name }},enable=${{ github.ref_type == 'branch' }}
+            type=raw,value=latest,enable=${{ steps.versions.outputs.latest_enable }}
+            type=sha
+            type=raw,value=${{ steps.versions.outputs.combo_tag }}
+
+      - name: Build and push Docker image
+        id: build-and-push
+        uses: docker/build-push-action@v5.0.0
+        with:
+          context: .
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            AGENT_VERSION=${{ steps.versions.outputs.base_image_tag }}
+            WEBUI_VERSION=${{ steps.versions.outputs.webui_patch_version }}
+            UV_SYNC_FROZEN=${{ steps.versions.outputs.uv_sync_frozen }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Sign the published Docker image
+        if: ${{ github.event_name != 'pull_request' }}
+        env:
+          TAGS: ${{ steps.meta.outputs.tags }}
+          DIGEST: ${{ steps.build-and-push.outputs.digest }}
+        run: echo "${TAGS}" | xargs -I {} cosign sign --yes {}@${DIGEST}
