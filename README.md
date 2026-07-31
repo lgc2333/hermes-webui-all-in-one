@@ -41,7 +41,7 @@ docker compose up -d
 
 环境变量详见 `.env.example`，其余配置项建议查阅 [Hermes Agent 文档](https://hermes-agent.nousresearch.com/docs) 与 [WebUI 配置说明](https://github.com/nesquena/hermes-webui#configuration--access)。
 
-**root/sudo 权限**：镜像默认无 sudo、无可用密码。如需容器内提权，自行创建 sudoers 文件并挂载：
+**root/sudo 权限**：镜像已装 sudo，但无可用密码、无预置 sudoers 配置。如需容器内提权，自行创建 sudoers 文件并挂载：
 
 1. 宿主机创建 sudoers 文件（用户名 hermes 固定；uid 随 HERMES_UID 变化，无需改动）：
 

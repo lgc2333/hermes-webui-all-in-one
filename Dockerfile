@@ -11,6 +11,11 @@ ARG WEBUI_VERSION=v0.52.106
 ARG UV_SYNC_FROZEN=--frozen
 USER root
 
+# 基镜像无 sudo，补装；sudoers 由部署者自行挂载（见 README「root/sudo 权限」）
+RUN apt-get -o Acquire::Retries=3 update && \
+    apt-get -o Acquire::Retries=3 install -y --no-install-recommends sudo && \
+    rm -rf /var/lib/apt/lists/*
+
 # workspace 素材（temp/ 由 docker/sync-sources.sh 生成，不入 git）
 COPY temp/pyproject.toml /opt/pyproject.toml
 COPY temp/uv.lock /opt/uv.lock

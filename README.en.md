@@ -41,7 +41,7 @@ docker compose up -d
 
 See `.env.example` for all environment variables; for the rest, refer to the [Hermes Agent docs](https://hermes-agent.nousresearch.com/docs) and the [WebUI configuration guide](https://github.com/nesquena/hermes-webui#configuration--access).
 
-**root/sudo access**: the image ships without sudo and no usable passwords. To get root inside the container, create your own sudoers file and mount it in:
+**root/sudo access**: sudo is pre-installed, but the image has no usable passwords and no sudoers configuration. To get root inside the container, create your own sudoers file and mount it in:
 
 1. Create the sudoers file on the host (username hermes is fixed; uid varies with HERMES_UID — no need to adjust):
 
