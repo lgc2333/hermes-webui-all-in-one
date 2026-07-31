@@ -28,9 +28,8 @@ RUN bash /tmp/patch-webui-pyproject.sh /opt/webui "${WEBUI_VERSION}" && rm /tmp/
 # 统一 venv（基镜像 /opt/hermes/.venv 不动；main 模式 UV_SYNC_FROZEN 为空；
 # PRETEND_VERSION 供 webui master 模式（dynamic 版本 + 镜像内无 .git）构建用；
 # agent 版本静态，不受影响）
-# --no-cache：wheel 缓存不落镜像（uv sync 层约减半）
 ENV UV_PROJECT_ENVIRONMENT=/opt/.venv
-RUN cd /opt && SETUPTOOLS_SCM_PRETEND_VERSION="${WEBUI_VERSION}" uv sync --no-cache ${UV_SYNC_FROZEN}
+RUN cd /opt && SETUPTOOLS_SCM_PRETEND_VERSION="${WEBUI_VERSION}" uv sync ${UV_SYNC_FROZEN}
 
 # 删除基镜像旧 venv，软链到统一 venv：基镜像脚本硬编码引用
 # /opt/hermes/.venv（stage2-hook/02-reconcile/dashboard/shims），
