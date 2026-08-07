@@ -1,0 +1,73 @@
+name: Check Updates
+
+# 每日 08:00（北京时间）检查 ghcr latest 镜像与上游版本差异；
+# 有差异 → 触发 docker.yml 重建（mark_latest）→ 构建完成后在固定 issue 追加评论
+# （用户订阅该 issue，每次评论触发 GitHub 原生邮件通知）。
+# workflow_dispatch 供手动测试：dry_run 只评论不构建；force_yes 强制走更新路径。
+
+on:
+  schedule:
+    - cron: '0 0 * * *'   # UTC 0 点 = 北京 8 点
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: '测试：强制走更新路径但只评论 issue，不触发构建'
+        required: false
+        default: false
+        type: boolean
+      force_yes:
+        description: '测试：忽略版本对比结果，强制按有差异处理'
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+  issues: write
+  actions: write
+
+env:
+  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  ISSUE_NUMBER: '1'
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 检查版本差异
+        id: check
+        run: |
+          bash scripts/check-versions.sh > /tmp/v.txt
+          cat /tmp/v.txt
+          set -a && . /tmp/v.txt && set +a
+          # force_yes 测试开关：DIFF 强制按 yes 处理
+          if [ "${{ inputs.force_yes }}" = "true" ]; then DIFF=yes; fi
+          echo "diff=${DIFF}" >> "$GITHUB_OUTPUT"
+          echo "agent_up=${AGENT_UP}" >> "$GITHUB_OUTPUT"
+          echo "webui_up=${WEBUI_UP}" >> "$GITHUB_OUTPUT"
+          echo "agent_img=${AGENT_IMG}" >> "$GITHUB_OUTPUT"
+          echo "webui_img=${WEBUI_IMG}" >> "$GITHUB_OUTPUT"
+
+      - name: 有差异 → 触发构建并等待完成
+        if: steps.check.outputs.diff == 'yes' && inputs.dry_run != 'true'
+        id: build
+        run: |
+          gh workflow run docker.yml -f mark_latest=true
+          sleep 15
+          RUN_ID="$(gh run list --workflow docker.yml --limit 1 --json databaseId --jq '.[0].databaseId')"
+          echo "run_id=${RUN_ID}" >> "$GITHUB_OUTPUT"
+          echo "触发构建 run: ${RUN_ID}"
+          gh run watch "${RUN_ID}" --exit-status
+
+      - name: 评论固定 issue（通知）
+        if: steps.check.outputs.diff == 'yes'
+        run: |
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            MSG="**[dry-run 测试]** 检测到版本差异（未触发构建）：hermes ${AGENT_IMG} → ${AGENT_UP}，webui ${WEBUI_IMG} → ${WEBUI_UP}"
+          else
+            MSG="🚀 镜像已更新：hermes ${AGENT_IMG} → ${AGENT_UP}，webui ${WEBUI_IMG} → ${WEBUI_UP}
+构建 run: https://github.com/lgc2333/hermes-webui-all-in-one/actions/runs/${RUN_ID}"
+          fi
+          gh issue comment "${ISSUE_NUMBER}" --body "${MSG}"
