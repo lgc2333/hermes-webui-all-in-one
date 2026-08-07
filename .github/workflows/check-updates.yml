@@ -67,7 +67,7 @@ jobs:
           if [ "${{ inputs.dry_run }}" = "true" ]; then
             MSG="**[dry-run 测试]** 检测到版本差异（未触发构建）：hermes ${AGENT_IMG} → ${AGENT_UP}，webui ${WEBUI_IMG} → ${WEBUI_UP}"
           else
-            MSG="🚀 镜像已更新：hermes ${AGENT_IMG} → ${AGENT_UP}，webui ${WEBUI_IMG} → ${WEBUI_UP}
-构建 run: https://github.com/lgc2333/hermes-webui-all-in-one/actions/runs/${RUN_ID}"
+            MSG="🚀 镜像已更新：hermes ${AGENT_IMG} → ${AGENT_UP}，webui ${WEBUI_IMG} → ${WEBUI_UP}"
+            MSG="${MSG}"$'\n'"构建 run: https://github.com/lgc2333/hermes-webui-all-in-one/actions/runs/${RUN_ID}"
           fi
           gh issue comment "${ISSUE_NUMBER}" --body "${MSG}"
